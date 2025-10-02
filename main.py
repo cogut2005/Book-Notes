@@ -4,12 +4,15 @@ import sqlite3
 import requests
 import json
 import threading
+import re
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QSplitter, QListWidget, QTextEdit, 
                              QLineEdit, QPushButton, QTextBrowser, QListWidgetItem,
                              QLabel, QMessageBox, QInputDialog, QDialog)
 from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
 from add_book_dialog import AddBookDialog
+from dotenv import load_dotenv
+from openai import OpenAI
 
 
 
@@ -17,6 +20,14 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.db_path = os.path.join(os.path.dirname(__file__), "notes_database.db")
+        
+        # Initialize DeepSeek client
+        self.local_client = OpenAI(
+            base_url="http://127.0.0.1:1234/v1",  
+            api_key="not-needed"                  
+        )
+        self.system_message = "You are a helpful assistant that analyzes a user's book collection and notes. You will be provided with the complete database of books, authors, types, and notes. Answer questions based on this data, provide insights, recommendations, or summaries as requested. If the answer cannot be found in the provided data, say so clearly."
+        
         self.init_database()
         self.init_ui()
         self.setup_connections()
@@ -97,6 +108,26 @@ class MainWindow(QMainWindow):
         books_label = QLabel("Books & Podcasts")
         books_label.setObjectName("panel-title")
         left_layout.addWidget(books_label)
+        
+        # Sort controls
+        sort_layout = QHBoxLayout()
+        sort_label = QLabel("Sort by:")
+        sort_label.setObjectName("sort-label")
+        sort_layout.addWidget(sort_label)
+        
+        from PyQt6.QtWidgets import QComboBox
+        self.sort_combo = QComboBox()
+        self.sort_combo.setObjectName("sort-combo")
+        self.sort_combo.addItems([
+            "Name (A-Z)", 
+            "Name (Z-A)", 
+            "Rating (High to Low)", 
+            "Rating (Low to High)",
+            "Author (A-Z)",
+            "Type"
+        ])
+        sort_layout.addWidget(self.sort_combo)
+        left_layout.addLayout(sort_layout)
         
         # Book list widget
         self.book_list = QListWidget()
@@ -200,6 +231,9 @@ class MainWindow(QMainWindow):
         # Real-time search as user types (with small delay)
         self.search_input.textChanged.connect(self.on_search_text_changed)
         
+        # Sort functionality
+        self.sort_combo.currentTextChanged.connect(self.on_sort_changed)
+        
     def load_stylesheet(self):
         """Load the CSS stylesheet"""
         css_path = os.path.join(os.path.dirname(__file__), "mainWindowStyle.css")
@@ -215,16 +249,24 @@ class MainWindow(QMainWindow):
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
-            # Create table with columns: name, creator, type, notes
+            # Create table with columns: name, creator, type, notes, rating
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS books (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
                     creator TEXT,
                     type TEXT NOT NULL,
-                    notes TEXT DEFAULT ''
+                    notes TEXT DEFAULT '',
+                    rating INTEGER DEFAULT 0 CHECK (rating >= 0 AND rating <= 5)
                 )
             ''')
+            
+            # Add rating column to existing tables if it doesn't exist
+            cursor.execute("PRAGMA table_info(books)")
+            columns = [column[1] for column in cursor.fetchall()]
+            if 'rating' not in columns:
+                cursor.execute('ALTER TABLE books ADD COLUMN rating INTEGER DEFAULT 0 CHECK (rating >= 0 AND rating <= 5)')
+                print("Added rating column to existing books table")
             
             conn.commit()
             conn.close()
@@ -234,16 +276,16 @@ class MainWindow(QMainWindow):
             print(f"Database error: {e}")
             QMessageBox.critical(self, "Database Error", f"Failed to initialize database: {e}")
     
-    def add_book_to_database(self, name, creator, book_type, initial_notes=''):
+    def add_book_to_database(self, name, creator, book_type, initial_notes='', rating=0):
         """Add a new book to the database"""
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
             cursor.execute('''
-                INSERT INTO books (name, creator, type, notes)
-                VALUES (?, ?, ?, ?)
-            ''', (name, creator, book_type, initial_notes))
+                INSERT INTO books (name, creator, type, notes, rating)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (name, creator, book_type, initial_notes, rating))
             
             book_id = cursor.lastrowid
             conn.commit()
@@ -256,13 +298,41 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Database Error", f"Failed to add book: {e}")
             return None
     
-    def load_books_from_database(self):
+    def rating_to_stars(self, rating):
+        """Convert numeric rating to star display"""
+        if rating == 0:
+            return "☆☆☆☆☆"
+        filled_stars = "⭐" * rating
+        empty_stars = "☆" * (5 - rating)
+        return filled_stars + empty_stars
+    
+    def on_sort_changed(self, sort_text):
+        """Handle sort selection change"""
+        self.load_books_from_database(sort_by=sort_text)
+    
+    def load_books_from_database(self, sort_by="Name (A-Z)"):
         """Load all books from database and populate the list widget"""
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
-            cursor.execute('SELECT id, name, creator, type, notes FROM books ORDER BY name')
+            # Determine ORDER BY clause based on sort_by parameter
+            if sort_by == "Name (A-Z)":
+                order_clause = "ORDER BY name ASC"
+            elif sort_by == "Name (Z-A)":
+                order_clause = "ORDER BY name DESC"
+            elif sort_by == "Rating (High to Low)":
+                order_clause = "ORDER BY rating DESC, name ASC"
+            elif sort_by == "Rating (Low to High)":
+                order_clause = "ORDER BY rating ASC, name ASC"
+            elif sort_by == "Author (A-Z)":
+                order_clause = "ORDER BY creator ASC, name ASC"
+            elif sort_by == "Type":
+                order_clause = "ORDER BY type ASC, name ASC"
+            else:
+                order_clause = "ORDER BY name ASC"
+            
+            cursor.execute(f'SELECT id, name, creator, type, notes, rating FROM books {order_clause}')
             books = cursor.fetchall()
             
             self.book_list.clear()
@@ -272,11 +342,15 @@ class MainWindow(QMainWindow):
             if books_label:
                 books_label.setText("Books & Podcasts")
             
-            for book_id, name, creator, book_type, notes in books:
+            for book_id, name, creator, book_type, notes, rating in books:
                 display_text = f"{name}"
                 if creator:
                     display_text += f" by {creator}"
                 display_text += f" ({book_type})"
+                
+                # Add rating display
+                stars = self.rating_to_stars(rating or 0)
+                display_text += f" {stars}"
                 
                 item = QListWidgetItem(display_text)
                 item.setData(Qt.ItemDataRole.UserRole, {
@@ -284,7 +358,8 @@ class MainWindow(QMainWindow):
                     "name": name,
                     "creator": creator,
                     "type": book_type,
-                    "notes": notes
+                    "notes": notes,
+                    "rating": rating or 0
                 })
                 self.book_list.addItem(item)
                 
@@ -357,9 +432,9 @@ class MainWindow(QMainWindow):
             # Convert search term to lowercase for case-insensitive search
             search_pattern = f"%{search_term.lower()}%"
             
-            # Include notes in the SELECT to show complete information
+            # Include notes and rating in the SELECT to show complete information
             cursor.execute('''
-                SELECT id, name, creator, type, notes FROM books 
+                SELECT id, name, creator, type, notes, rating FROM books 
                 WHERE LOWER(name) LIKE ? 
                    OR LOWER(creator) LIKE ? 
                    OR LOWER(type) LIKE ? 
@@ -374,22 +449,26 @@ class MainWindow(QMainWindow):
                     name
             ''', (search_pattern, search_pattern, search_pattern, search_pattern,
                   search_pattern, search_pattern, search_pattern))
-            
+
             books = cursor.fetchall()
-            
+
             self.book_list.clear()
-            
+
             # Update the panel title to show search status
             books_label = self.findChild(QLabel, "panel-title")
             if books_label:
                 books_label.setText(f"Search Results for '{search_term}' ({len(books)} found)")
-            
-            for book_id, name, creator, book_type, notes in books:
+
+            for book_id, name, creator, book_type, notes, rating in books:
                 # Create enhanced display text with more information
                 display_text = f"📖 {name}"
                 if creator:
                     display_text += f"\n👤 by {creator}"
                 display_text += f"\n🏷️ {book_type}"
+                
+                # Add rating display
+                stars = self.rating_to_stars(rating or 0)
+                display_text += f"\n⭐ {stars}"
                 
                 # Add notes preview if notes contain the search term
                 if notes and search_term.lower() in notes.lower():
@@ -407,7 +486,8 @@ class MainWindow(QMainWindow):
                     "name": name,
                     "creator": creator,
                     "type": book_type,
-                    "notes": notes
+                    "notes": notes,
+                    "rating": rating or 0
                 })
                 self.book_list.addItem(item)
             
@@ -556,7 +636,8 @@ class MainWindow(QMainWindow):
                     book_data['name'], 
                     book_data['creator'], 
                     book_data['type'],
-                    book_data['notes']
+                    book_data['notes'],
+                    book_data['rating']
                 )
                 
                 if book_id:
@@ -623,14 +704,81 @@ class MainWindow(QMainWindow):
             print("Save Note clicked: No book selected")
             QMessageBox.warning(self, "Warning", "Please select a book first!")
             
+    def get_all_database_content(self):
+        """Get all books and notes from database as formatted text context"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT id, name, creator, type, notes, rating FROM books ORDER BY name")
+            books = cursor.fetchall()
+            conn.close()
+            
+            if not books:
+                return "No books found in the database."
+            
+            context = "Here is all the content from the user's book collection:\n\n"
+            
+            for book_id, name, creator, book_type, notes, rating in books:
+                context += f"Book #{book_id}:\n"
+                context += f"Title: {name}\n"
+                if creator:
+                    context += f"Author/Creator: {creator}\n"
+                if book_type:
+                    context += f"Type: {book_type}\n"
+                if rating > 0:
+                    stars = "⭐" * rating + "☆" * (5 - rating)
+                    context += f"Rating: {stars} ({rating}/5 stars)\n"
+                else:
+                    context += f"Rating: Not rated\n"
+                if notes:
+                    context += f"Notes: {notes}\n"
+                else:
+                    context += "Notes: (No notes yet)\n"
+                context += "\n" + "-"*50 + "\n\n"
+            
+            return context
+            
+        except Exception as e:
+            return f"Error retrieving database content: {str(e)}"
+    
+    def clean_output(self, text: str) -> str:
+        """Remove <think> ... </think> blocks if they exist"""
+        return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+    
+    def message_local(self, prompt: str) -> str:
+        """Send message to local AI model with database context"""
+        try:
+            # Get all database content as context
+            database_context = self.get_all_database_content()
+            
+            # Combine the database context with the user's question
+            full_prompt = f"{database_context}\n\nUser Question: {prompt}\n\nPlease answer the question based on the book collection data above. If there is no relevant information, please provide informative answers based on your own knowladge. Assume that all the content in the database has been read by the user."
+            
+            messages = [
+                {"role": "system", "content": self.system_message},
+                {"role": "user", "content": full_prompt}
+            ]
+            completion = self.local_client.chat.completions.create(
+                model="deepseek-r1-distill-qwen-14b",
+                messages=messages,
+            )
+            return self.clean_output(completion.choices[0].message.content)
+        except Exception as e:
+            return f"Error connecting to local model: {str(e)}"
+    
     def on_ask_ai_clicked(self):
-        """Handle ask AI button click"""
+        """Handle ask AI button click with real AI integration"""
         question = self.ai_question_input.text().strip()
         if question:
             print(f"Ask AI clicked: '{question}'")
             # Add the question to the AI response browser
             self.ai_response_browser.append(f"You: {question}")
-            self.ai_response_browser.append("AI: This is a placeholder response. AI integration coming soon!")
+            
+            # Get AI response with database context
+            response = self.message_local(question)
+            self.ai_response_browser.append(f"AI: {response}")
+            
             self.ai_question_input.clear()
         else:
             print("Ask AI clicked: No question entered")

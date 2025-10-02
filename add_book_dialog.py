@@ -52,6 +52,18 @@ class AddBookDialog(QDialog):
         self.type_label.setObjectName("type_label")
         self.type_label.setBuddy(self.type_combo)
         form_layout.addRow(self.type_label, self.type_combo)
+        
+        # Rating field
+        self.rating_combo = QComboBox()
+        self.rating_combo.setObjectName("rating_combo")
+        self.rating_combo.addItems(["⭐⭐⭐⭐⭐ (5 stars)", "⭐⭐⭐⭐☆ (4 stars)", "⭐⭐⭐☆☆ (3 stars)", 
+                                   "⭐⭐☆☆☆ (2 stars)", "⭐☆☆☆☆ (1 star)", "☆☆☆☆☆ (Not rated)"])
+        self.rating_combo.setCurrentIndex(5)  # Default to "Not rated"
+        
+        self.rating_label = QLabel("Rating:")
+        self.rating_label.setObjectName("rating_label")
+        self.rating_label.setBuddy(self.rating_combo)
+        form_layout.addRow(self.rating_label, self.rating_combo)
 
         layout.addLayout(form_layout)
         
@@ -76,11 +88,16 @@ class AddBookDialog(QDialog):
         
     def get_book_data(self):
         """Return the entered book data"""
+        # Convert rating index to rating value (5-star system)
+        rating_index = self.rating_combo.currentIndex()
+        rating_value = 5 - rating_index if rating_index < 5 else 0  # 0 for "Not rated"
+        
         return {
             'name': self.name_input.text().strip(),
             'creator': self.creator_input.text().strip(),
             'type': self.type_combo.currentText(),
-            'notes': self.notes_input.toPlainText().strip()
+            'notes': self.notes_input.toPlainText().strip(),
+            'rating': rating_value
         }
         
     def validate_input(self):
