@@ -1,0 +1,243 @@
+/* Main Dialog Styling */
+QDialog {
+    background-color: #f8f9fa;
+    font-family: "SF Pro Display", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+    border: 1px solid #e1e8ed;
+    border-radius: 15px;
+}
+
+/* Form Labels */
+QLabel {
+    font-size: 14px;
+    font-weight: 600;
+    color: #2c3e50;
+    padding: 8px 0px 4px 0px;
+    background-color: transparent;
+}
+
+QLabel#notes_label {
+    font-size: 16px;
+    font-weight: bold;
+    color: #2c3e50;
+    margin-top: 15px;
+    margin-bottom: 8px;
+    padding: 10px 0px;
+    background-color: transparent;
+}
+
+/* Input Fields Styling */
+QLineEdit#name_input, QLineEdit#creator_input {
+    padding: 12px 16px;
+    border: 2px solid #e1e8ed;
+    border-radius: 10px;
+    background-color: white;
+    font-size: 14px;
+    color: #2c3e50;
+    min-height: 22px;
+    selection-background-color: #e3f2fd;
+}
+
+QLineEdit#name_input:focus, QLineEdit#creator_input:focus {
+    border-color: #3498db;
+    outline: none;
+    background-color: #fafbfc;
+}
+
+QLineEdit#name_input:hover, QLineEdit#creator_input:hover {
+    border-color: #bdc3c7;
+    background-color: #fafbfc;
+}
+
+/* ComboBox Styling */
+QComboBox#type_combo {
+    padding: 12px 16px;
+    border: 2px solid #e1e8ed;
+    border-radius: 10px;
+    background-color: white;
+    font-size: 14px;
+    color: #2c3e50;
+    min-height: 22px;
+    selection-background-color: #e3f2fd;
+}
+
+QComboBox#type_combo:focus {
+    border-color: #3498db;
+    outline: none;
+    background-color: #fafbfc;
+}
+
+QComboBox#type_combo:hover {
+    border-color: #bdc3c7;
+    background-color: #fafbfc;
+}
+
+/* ComboBox dropdown arrow */
+QComboBox#type_combo::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 25px;
+    border-left-width: 1px;
+    border-left-color: #e1e8ed;
+    border-left-style: solid;
+    border-top-right-radius: 10px;
+    border-bottom-right-radius: 10px;
+    background-color: #f8f9fa;
+}
+
+QComboBox#type_combo::down-arrow {
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid #2c3e50;
+    margin: 0px 2px;
+}
+
+QComboBox#type_combo::down-arrow:hover {
+    border-top-color: #3498db;
+}
+
+/* ComboBox dropdown list */
+QComboBox#type_combo QAbstractItemView {
+    background-color: white;
+    border: 2px solid #3498db;
+    border-radius: 8px;
+    selection-background-color: #3498db;
+    selection-color: white;
+    outline: none;
+    padding: 5px 0px;
+}
+
+QComboBox#type_combo QAbstractItemView::item {
+    padding: 10px 15px;
+    border: none;
+    margin: 2px 5px;
+    border-radius: 5px;
+}
+
+QComboBox#type_combo QAbstractItemView::item:selected {
+    background-color: #3498db;
+    color: white;
+}
+
+QComboBox#type_combo QAbstractItemView::item:hover {
+    background-color: #e3f2fd;
+    color: #2c3e50;
+}
+
+/* TextEdit for notes */
+QTextEdit#notes_input {
+    padding: 15px;
+    border: 2px solid #e1e8ed;
+    border-radius: 12px;
+    background-color: white;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #2c3e50;
+    selection-background-color: #e3f2fd;
+}
+
+QTextEdit#notes_input:focus {
+    border-color: #3498db;
+    outline: none;
+    background-color: #fafbfc;
+}
+
+QTextEdit#notes_input:hover {
+    border-color: #bdc3c7;
+    background-color: #fafbfc;
+}
+
+/* Dialog Button Box */
+QDialogButtonBox {
+    background-color: transparent;
+    border: none;
+    margin-top: 20px;
+}
+
+/* OK Button (Accept) */
+QDialogButtonBox QPushButton[text="OK"] {
+    background-color: #27ae60;
+    color: white;
+    border: none;
+    padding: 12px 25px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    min-width: 100px;
+    margin: 0px 5px;
+}
+
+QDialogButtonBox QPushButton[text="OK"]:hover {
+    background-color: #229954;
+}
+
+QDialogButtonBox QPushButton[text="OK"]:pressed {
+    background-color: #1e8449;
+}
+
+/* Cancel Button */
+QDialogButtonBox QPushButton[text="Cancel"] {
+    background-color: #95a5a6;
+    color: white;
+    border: none;
+    padding: 12px 25px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    min-width: 100px;
+    margin: 0px 5px;
+}
+
+QDialogButtonBox QPushButton[text="Cancel"]:hover {
+    background-color: #7f8c8d;
+}
+
+QDialogButtonBox QPushButton[text="Cancel"]:pressed {
+    background-color: #6c7b7d;
+}
+
+/* Disabled button state */
+QDialogButtonBox QPushButton:disabled {
+    background-color: #ecf0f1;
+    color: #bdc3c7;
+}
+
+/* FormLayout styling for better spacing */
+QFormLayout {
+    spacing: 15px;
+}
+
+/* Scrollbar styling for TextEdit */
+QScrollBar:vertical {
+    background-color: #f1f2f6;
+    width: 10px;
+    border-radius: 5px;
+    margin: 0px;
+}
+
+QScrollBar::handle:vertical {
+    background-color: #c7d2fe;
+    border-radius: 5px;
+    min-height: 30px;
+    margin: 0px 1px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: #a5b4fc;
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+/* Tooltip styling */
+QToolTip {
+    background-color: #2c3e50;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+}

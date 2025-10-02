@@ -1,0 +1,328 @@
+/* Main Application Styling */
+QMainWindow {
+    background-color: #f5f5f5;
+    font-family: "Segoe UI", "SF Pro Display", -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Panel Titles */
+QLabel#panel-title {
+    font-size: 16px;
+    font-weight: bold;
+    color: #2c3e50;
+    padding: 8px 0px;
+    background-color: transparent;
+}
+
+/* Search Bar Styling */
+QLabel#search-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #34495e;
+    padding: 0px 8px;
+}
+
+QLineEdit#search-input {
+    padding: 10px 15px;
+    border: 2px solid #bdc3c7;
+    border-radius: 8px;
+    background-color: white;
+    font-size: 14px;
+    color: #2c3e50;
+    min-height: 20px;
+}
+
+QLineEdit#search-input:focus {
+    border-color: #3498db;
+    outline: none;
+}
+
+QPushButton#search-button {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    min-width: 80px;
+}
+
+QPushButton#search-button:hover {
+    background-color: #2980b9;
+}
+
+QPushButton#search-button:pressed {
+    background-color: #21618c;
+}
+
+QPushButton#clear-search-button {
+    background-color: #95a5a6;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    min-width: 70px;
+}
+
+QPushButton#clear-search-button:hover {
+    background-color: #7f8c8d;
+}
+
+QPushButton#clear-search-button:pressed {
+    background-color: #6c7b7d;
+}
+
+/* Left Panel Styling */
+QWidget#left-panel {
+    background-color: white;
+    border: 1px solid #e1e8ed;
+    border-radius: 10px;
+    margin: 5px;
+}
+
+QListWidget#book-list {
+    background-color: transparent;
+    border: none;
+    padding: 10px;
+    font-size: 14px;
+    outline: none;
+}
+
+QListWidget#book-list::item {
+    padding: 15px;
+    border-bottom: 1px solid #ecf0f1;
+    color: #2c3e50;
+    border-radius: 6px;
+    margin: 3px 0px;
+    min-height: 60px;
+    line-height: 1.4;
+}
+
+QListWidget#book-list::item:hover {
+    background-color: #f8f9fa;
+}
+
+QListWidget#book-list::item:selected {
+    background-color: #e3f2fd;
+    color: #1976d2;
+    border: 1px solid #2196f3;
+}
+
+QPushButton#add-book-button {
+    background-color: #27ae60;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    margin: 10px;
+}
+
+QPushButton#add-book-button:hover {
+    background-color: #229954;
+}
+
+QPushButton#add-book-button:pressed {
+    background-color: #1e8449;
+}
+
+QPushButton#delete-book-button {
+    background-color: #e74c3c;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    margin: 10px;
+}
+
+QPushButton#delete-book-button:hover {
+    background-color: #c0392b;
+}
+
+QPushButton#delete-book-button:pressed {
+    background-color: #a93226;
+}
+
+QPushButton#delete-book-button:disabled {
+    background-color: #bdc3c7;
+    color: #95a5a6;
+    border: 1px solid #ecf0f1;
+}
+
+/* Right Panel Styling */
+QWidget#right-panel {
+    background-color: white;
+    border: 1px solid #e1e8ed;
+    border-radius: 10px;
+    margin: 5px;
+}
+
+QTextEdit#notes-editor {
+    background-color: transparent;
+    border: none;
+    padding: 15px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #2c3e50;
+}
+
+QTextEdit#notes-editor:focus {
+    outline: none;
+}
+
+QPushButton#save-note-button {
+    background-color: #e67e22;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    margin: 10px;
+}
+
+QPushButton#save-note-button:hover {
+    background-color: #d68910;
+}
+
+QPushButton#save-note-button:pressed {
+    background-color: #b7950b;
+}
+
+/* AI Panel Styling */
+QWidget#ai-panel {
+    background-color: white;
+    border: 1px solid #e1e8ed;
+    border-radius: 10px;
+    margin: 5px 5px 10px 5px;
+}
+
+QTextBrowser#ai-response-browser {
+    background-color: #fafafa;
+    border: 1px solid #e1e8ed;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 13px;
+    color: #2c3e50;
+    margin: 0px 10px;
+}
+
+QLineEdit#ai-question-input {
+    padding: 10px 15px;
+    border: 2px solid #bdc3c7;
+    border-radius: 8px;
+    background-color: white;
+    font-size: 14px;
+    color: #2c3e50;
+    min-height: 20px;
+    margin: 10px 5px 10px 10px;
+}
+
+QLineEdit#ai-question-input:focus {
+    border-color: #9b59b6;
+    outline: none;
+}
+
+QPushButton#ask-ai-button {
+    background-color: #9b59b6;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    min-width: 80px;
+    margin: 10px 10px 10px 5px;
+}
+
+QPushButton#ask-ai-button:hover {
+    background-color: #8e44ad;
+}
+
+QPushButton#ask-ai-button:pressed {
+    background-color: #7d3c98;
+}
+
+/* Splitter Styling */
+QSplitter {
+    background-color: transparent;
+}
+
+QSplitter::handle {
+    background-color: #bdc3c7;
+    width: 3px;
+    height: 3px;
+    border-radius: 1px;
+}
+
+QSplitter::handle:hover {
+    background-color: #95a5a6;
+}
+
+/* Scrollbar Styling */
+QScrollBar:vertical {
+    background-color: #f1f2f6;
+    width: 12px;
+    border-radius: 6px;
+    margin: 0px;
+}
+
+QScrollBar::handle:vertical {
+    background-color: #c7d2fe;
+    border-radius: 6px;
+    min-height: 30px;
+    margin: 0px 2px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: #a5b4fc;
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+QScrollBar:horizontal {
+    background-color: #f1f2f6;
+    height: 12px;
+    border-radius: 6px;
+    margin: 0px;
+}
+
+QScrollBar::handle:horizontal {
+    background-color: #c7d2fe;
+    border-radius: 6px;
+    min-width: 30px;
+    margin: 2px 0px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background-color: #a5b4fc;
+}
+
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    width: 0px;
+}
+
+/* Additional Polish */
+QWidget {
+    selection-background-color: #e3f2fd;
+    selection-color: #1976d2;
+}
+
+/* Tooltip Styling */
+QToolTip {
+    background-color: #2c3e50;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+}
