@@ -15,6 +15,8 @@ from edit_book_dialog import EditBookDialog
 from dotenv import load_dotenv
 from openai import OpenAI
 
+MODEL_NAME = "openai/gpt-oss-20b"
+
 
 
 class MainWindow(QMainWindow):
@@ -768,7 +770,7 @@ class MainWindow(QMainWindow):
                 {"role": "user", "content": full_prompt}
             ]
             completion = self.local_client.chat.completions.create(
-                model="deepseek-r1-distill-qwen-14b",
+                model=MODEL_NAME,
                 messages=messages,
             )
             return self.clean_output(completion.choices[0].message.content)
