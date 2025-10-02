@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QLabel, QMessageBox, QInputDialog, QDialog)
 from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
 from add_book_dialog import AddBookDialog
+from edit_book_dialog import EditBookDialog
 from dotenv import load_dotenv
 from openai import OpenAI
 
@@ -143,6 +144,12 @@ class MainWindow(QMainWindow):
         self.add_book_button.setObjectName("add-book-button")
         button_layout.addWidget(self.add_book_button)
         
+        # Edit Book button
+        self.edit_book_button = QPushButton("Edit Book")
+        self.edit_book_button.setObjectName("edit-book-button")
+        self.edit_book_button.setEnabled(False)  # Initially disabled
+        button_layout.addWidget(self.edit_book_button)
+        
         # Delete Book button
         self.delete_book_button = QPushButton("Delete Book")
         self.delete_book_button.setObjectName("delete-book-button")
@@ -219,6 +226,7 @@ class MainWindow(QMainWindow):
         self.search_button.clicked.connect(self.on_search_clicked)
         self.clear_search_button.clicked.connect(self.on_clear_search_clicked)
         self.add_book_button.clicked.connect(self.on_add_book_clicked)
+        self.edit_book_button.clicked.connect(self.on_edit_book_clicked)
         self.delete_book_button.clicked.connect(self.on_delete_book_clicked)
         self.save_note_button.clicked.connect(self.on_save_note_clicked)
         self.ask_ai_button.clicked.connect(self.on_ask_ai_clicked)
@@ -790,7 +798,8 @@ class MainWindow(QMainWindow):
             selected_book = selected_items[0].data(Qt.ItemDataRole.UserRole)
             print(f"Book selected: '{selected_book['name']}' ({selected_book['type']})")
             
-            # Enable delete button
+            # Enable edit and delete buttons
+            self.edit_book_button.setEnabled(True)
             self.delete_book_button.setEnabled(True)
             
             # Load existing notes - use cached notes if available, otherwise fetch from database
@@ -815,10 +824,69 @@ class MainWindow(QMainWindow):
                 if search_term.lower() in existing_notes.lower():
                     print(f"  ✓ Search term '{search_term}' found in notes")
         else:
-            # Disable delete button when no book is selected
+            # Disable edit and delete buttons when no book is selected
+            self.edit_book_button.setEnabled(False)
             self.delete_book_button.setEnabled(False)
             self.notes_editor.clear()
             self.notes_editor.setPlaceholderText("Select a book from the left panel to start taking notes...")
+    
+    def on_edit_book_clicked(self):
+        """Handle edit book button click"""
+        selected_items = self.book_list.selectedItems()
+        if selected_items:
+            selected_book = selected_items[0].data(Qt.ItemDataRole.UserRole)
+            
+            # Create and show edit dialog
+            dialog = EditBookDialog(selected_book, self)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                if dialog.validate_input():
+                    book_data = dialog.get_book_data()
+                    
+                    # Update in database
+                    if self.update_book_in_database(book_data):
+                        # Refresh the book list to show updated information
+                        current_sort = self.sort_combo.currentText()
+                        self.load_books_from_database(sort_by=current_sort)
+                        
+                        print(f"Updated book: '{book_data['name']}' by '{book_data['creator']}' ({book_data['type']}) - Rating: {book_data['rating']} stars")
+                        
+                        # Reselect the updated book if possible
+                        for i in range(self.book_list.count()):
+                            item = self.book_list.item(i)
+                            item_data = item.data(Qt.ItemDataRole.UserRole)
+                            if item_data and item_data.get('id') == book_data['id']:
+                                self.book_list.setCurrentItem(item)
+                                break
+        else:
+            QMessageBox.warning(self, "Warning", "Please select a book to edit!")
+    
+    def update_book_in_database(self, book_data):
+        """Update an existing book in the database"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                UPDATE books 
+                SET name = ?, creator = ?, type = ?, rating = ?
+                WHERE id = ?
+            ''', (book_data['name'], book_data['creator'], book_data['type'], 
+                  book_data['rating'], book_data['id']))
+            
+            if cursor.rowcount > 0:
+                conn.commit()
+                conn.close()
+                QMessageBox.information(self, "Success", "Book updated successfully!")
+                return True
+            else:
+                conn.close()
+                QMessageBox.warning(self, "Error", "Book not found in database!")
+                return False
+                
+        except sqlite3.Error as e:
+            print(f"Error updating book: {e}")
+            QMessageBox.critical(self, "Database Error", f"Failed to update book: {e}")
+            return False
 
 
 if __name__ == "__main__":
