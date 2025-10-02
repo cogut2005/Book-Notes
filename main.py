@@ -565,7 +565,7 @@ class MainWindow(QMainWindow):
         self.ai_response_browser.append(f"🔍 Search Results for '{search_term}'")
         self.ai_response_browser.append(f"Found {len(books)} matching books:")
         
-        for i, (book_id, name, creator, book_type, notes) in enumerate(books[:3], 1):  # Show first 3 results
+        for i, (book_id, name, creator, book_type, notes, rating) in enumerate(books[:3], 1):  # Show first 3 results
             self.ai_response_browser.append(f"\n{i}. 📖 {name}")
             if creator:
                 self.ai_response_browser.append(f"   👤 Author: {creator}")
