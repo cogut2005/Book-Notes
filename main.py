@@ -14,6 +14,8 @@ from add_book_dialog import AddBookDialog
 from edit_book_dialog import EditBookDialog
 from dotenv import load_dotenv
 from openai import OpenAI
+import chromadb
+from sentence_transformers import SentenceTransformer
 
 MODEL_NAME = "openai/gpt-oss-20b"
 
@@ -24,13 +26,17 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.db_path = os.path.join(os.path.dirname(__file__), "notes_database.db")
         
-        # Initialize DeepSeek client
         self.local_client = OpenAI(
             base_url="http://127.0.0.1:1234/v1",  
             api_key="not-needed"                  
         )
         self.system_message = "You are a helpful assistant that analyzes a user's book collection and notes. You will be provided with the complete database of books, authors, types, and notes. Answer questions based on this data, provide insights, recommendations, or summaries as requested. If the answer cannot be found in the provided data, say so clearly."
-        
+ 
+
+        self.chroma_client = chromadb.PersistentClient(path="chroma_store")
+        self.collection = self.chroma_client.get_or_create_collection("notes")
+        self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+
         self.init_database()
         self.init_ui()
         self.setup_connections()
