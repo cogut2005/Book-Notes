@@ -516,6 +516,7 @@ class MainWindow(QMainWindow):
                 # Clear AI chat area when no results
                 self.ai_response_browser.clear()
                 self.ai_response_browser.append("AI Assistant: No search results found. Try different search terms.")
+        
             else:
                 # Auto-select first result and show its complete notes
                 if books:
@@ -620,8 +621,8 @@ class MainWindow(QMainWindow):
         # Stop the previous timer
         self.search_timer.stop()
         
-        # Start a new timer with 300ms delay to avoid too many searches
-        self.search_timer.start(300)
+        # Start a new timer with 1000ms (1 second) delay to avoid too many searches
+        self.search_timer.start(1000)
     
     def perform_delayed_search(self):
         """Perform the actual search after the timer delay"""
@@ -714,6 +715,16 @@ class MainWindow(QMainWindow):
                 print(f"Save Note clicked: Saved note for '{selected_book['name']}'")
                 print(f"Note content length: {len(note_content)} characters")
                 QMessageBox.information(self, "Success", "Notes saved successfully!")
+                chunks = [note_content[i:i+500] for i in range(0, len(note_content), 500)]
+                for idx, chunk in enumerate(chunks):
+                    doc_id = f"{selected_book['id']}_{idx}"
+                    embedding = self.embedding_model.encode(chunk).tolist()
+                    self.collection.upsert(
+                        documents=[chunk],
+                        embeddings=[embedding],
+                        ids=[doc_id],
+                        metadatas=[{"book_id": selected_book['id']}]
+                    )
             else:
                 QMessageBox.warning(self, "Error", "Failed to save notes!")
         else:
@@ -763,25 +774,36 @@ class MainWindow(QMainWindow):
         return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
     
     def message_local(self, prompt: str) -> str:
-        """Send message to local AI model with database context"""
+        """Send message to local AI model with RAG retrieval"""
         try:
-            # Get all database content as context
-            database_context = self.get_all_database_content()
+            # Encode query
+            query_embedding = self.embedding_model.encode(prompt).tolist()
             
-            # Combine the database context with the user's question
-            full_prompt = f"{database_context}\n\nUser Question: {prompt}\n\nPlease answer the question based on the book collection data above. If there is no relevant information, please provide informative answers based on your own knowladge. Assume that all the content in the database has been read by the user."
-            
+            # Retrieve top 5 chunks
+            results = self.collection.query(
+                query_embeddings=[query_embedding],
+                n_results=5
+            )
+
+            retrieved_chunks = results.get("documents", [[]])[0]
+            retrieved_text = "\n\n".join(retrieved_chunks) if retrieved_chunks else "(No relevant notes found)"
+
+            # Build prompt
+            full_prompt = f"Here are some relevant notes:\n{retrieved_text}\n\nUser Question: {prompt}"
+
             messages = [
                 {"role": "system", "content": self.system_message},
                 {"role": "user", "content": full_prompt}
             ]
+
             completion = self.local_client.chat.completions.create(
                 model=MODEL_NAME,
                 messages=messages,
             )
             return self.clean_output(completion.choices[0].message.content)
+
         except Exception as e:
-            return f"Error connecting to local model: {str(e)}"
+            return f"Error in RAG pipeline: {str(e)}"
     
     def on_ask_ai_clicked(self):
         """Handle ask AI button click with real AI integration"""
