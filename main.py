@@ -49,6 +49,11 @@ class MainWindow(QMainWindow):
         self.setup_connections()
         self.load_stylesheet()
         self.load_books_from_database()
+
+        self.local_client = OpenAI(
+            base_url="http://127.0.0.1:1234/v1",  
+            api_key="not-needed"                  
+        )
         
         # Initialize search timer for delayed search
         self.search_timer = QTimer()
