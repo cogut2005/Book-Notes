@@ -778,13 +778,6 @@ class MainWindow(QMainWindow):
         return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
     
     def message_local(self, prompt: str) -> str:
-        llm = ChatOpenAI(
-            model=MODEL_NAME,
-            temperature=0.7,
-            openai_api_key="not-needed",
-            openai_api_base="http://127.0.0.1:1234/v1"
-        )
-
         documents = self.get_all_database_content()
 
         if not documents:
@@ -795,14 +788,27 @@ class MainWindow(QMainWindow):
         chunks = text_splitter.split_documents(docs)
         embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
         vectorstore = FAISS.from_documents(chunks, embedding=embeddings)
-        retriever = vectorstore.as_retriever()
-        memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True)
 
-        conversation_chain = ConversationalRetrievalChain.from_llm(
-        llm=llm,
-        retriever=retriever,
-        memory=memory
-    )
+        retriever = vectorstore.as_retriever()
+        retrieved_docs = retriever.get_relevant_documents(prompt)
+        context = "\n\n".join([doc.page_content for doc in retrieved_docs])
+
+        full_prompt = f"{prompt}\n\nContext from notes:\n{context}"
+
+        messages = [
+        {"role": "system", "content": self.system_message},
+        {"role": "user", "content": full_prompt}
+        ]
+
+        response = self.local_client.chat.completions.create(
+        model=MODEL_NAME,
+        messages=messages,
+        temperature=0.7,
+        max_tokens=1024
+        )
+
+        return response.choices[0].message.content.strip()
+
 
 
 
