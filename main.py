@@ -724,16 +724,6 @@ class MainWindow(QMainWindow):
                 print(f"Save Note clicked: Saved note for '{selected_book['name']}'")
                 print(f"Note content length: {len(note_content)} characters")
                 QMessageBox.information(self, "Success", "Notes saved successfully!")
-                chunks = [note_content[i:i+500] for i in range(0, len(note_content), 500)]
-                for idx, chunk in enumerate(chunks):
-                    doc_id = f"{selected_book['id']}_{idx}"
-                    embedding = self.embedding_model.encode(chunk).tolist()
-                    self.collection.upsert(
-                        documents=[chunk],
-                        embeddings=[embedding],
-                        ids=[doc_id],
-                        metadatas=[{"book_id": selected_book['id']}]
-                    )
             else:
                 QMessageBox.warning(self, "Error", "Failed to save notes!")
         else:
