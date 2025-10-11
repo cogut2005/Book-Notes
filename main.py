@@ -1,6 +1,8 @@
 import sys
 import os
 import sqlite3
+from langchain_openai import ChatOpenAI
+from langchain_text_splitters import CharacterTextSplitter
 import requests
 import json
 import threading
@@ -14,8 +16,22 @@ from add_book_dialog import AddBookDialog
 from edit_book_dialog import EditBookDialog
 from dotenv import load_dotenv
 from openai import OpenAI
-import chromadb
 from sentence_transformers import SentenceTransformer
+
+from langchain.document_loaders import DirectoryLoader, TextLoader
+from langchain.schema import Document
+#from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_community.embeddings import HuggingFaceEmbeddings
+
+from langchain.vectorstores import FAISS
+import numpy as np
+from sklearn.manifold import TSNE
+from langchain.memory import ConversationBufferMemory
+from langchain.chains import ConversationalRetrievalChain
+
+from langchain_community.chat_models import ChatOllama
+from langchain.chains import ConversationalRetrievalChain
+from langchain.memory import ConversationBufferMemory
 
 MODEL_NAME = "openai/gpt-oss-20b"
 
@@ -26,16 +42,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.db_path = os.path.join(os.path.dirname(__file__), "notes_database.db")
         
-        self.local_client = OpenAI(
-            base_url="http://127.0.0.1:1234/v1",  
-            api_key="not-needed"                  
-        )
         self.system_message = "You are a helpful assistant that analyzes a user's book collection and notes. You will be provided with the complete database of books, authors, types, and notes. Answer questions based on this data, provide insights, recommendations, or summaries as requested. If the answer cannot be found in the provided data, say so clearly."
- 
-
-        self.chroma_client = chromadb.PersistentClient(path="chroma_store")
-        self.collection = self.chroma_client.get_or_create_collection("notes")
-        self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
         self.init_database()
         self.init_ui()
@@ -227,8 +234,6 @@ class MainWindow(QMainWindow):
         
         parent_layout.addWidget(ai_widget)
         
-
-            
     def setup_connections(self):
         """Connect buttons to their respective slot methods"""
         self.search_button.clicked.connect(self.on_search_clicked)
@@ -604,7 +609,6 @@ class MainWindow(QMainWindow):
         
         self.ai_response_browser.append(f"\n💡 Click on any book to see complete notes and details.")
             
-    # Placeholder slot methods
     def on_search_clicked(self):
         """Handle search button click"""
         search_term = self.search_input.text().strip()
@@ -774,37 +778,35 @@ class MainWindow(QMainWindow):
         return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
     
     def message_local(self, prompt: str) -> str:
-        """Send message to local AI model with RAG retrieval"""
-        try:
-            # Encode query
-            query_embedding = self.embedding_model.encode(prompt).tolist()
-            
-            # Retrieve top 5 chunks
-            results = self.collection.query(
-                query_embeddings=[query_embedding],
-                n_results=5
-            )
+        llm = ChatOpenAI(
+            model=MODEL_NAME,
+            temperature=0.7,
+            openai_api_key="not-needed",
+            openai_api_base="http://127.0.0.1:1234/v1"
+        )
 
-            retrieved_chunks = results.get("documents", [[]])[0]
-            retrieved_text = "\n\n".join(retrieved_chunks) if retrieved_chunks else "(No relevant notes found)"
+        documents = self.get_all_database_content()
 
-            # Build prompt
-            full_prompt = f"Here are some relevant notes:\n{retrieved_text}\n\nUser Question: {prompt}"
+        if not documents:
+            return "No notes found in the database."
+        
+        docs = [Document(page_content=doc) for doc in documents]
+        text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+        chunks = text_splitter.split_documents(docs)
+        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        vectorstore = FAISS.from_documents(chunks, embedding=embeddings)
+        retriever = vectorstore.as_retriever()
+        memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True)
 
-            messages = [
-                {"role": "system", "content": self.system_message},
-                {"role": "user", "content": full_prompt}
-            ]
+        conversation_chain = ConversationalRetrievalChain.from_llm(
+        llm=llm,
+        retriever=retriever,
+        memory=memory
+    )
 
-            completion = self.local_client.chat.completions.create(
-                model=MODEL_NAME,
-                messages=messages,
-            )
-            return self.clean_output(completion.choices[0].message.content)
 
-        except Exception as e:
-            return f"Error in RAG pipeline: {str(e)}"
-    
+
+
     def on_ask_ai_clicked(self):
         """Handle ask AI button click with real AI integration"""
         question = self.ai_question_input.text().strip()
