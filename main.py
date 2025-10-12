@@ -790,8 +790,17 @@ class MainWindow(QMainWindow):
 
         full_prompt = f"{prompt}\n\nContext from notes:\n{context}"
 
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT name, creator, type, rating FROM books ORDER BY name")
+        books = cursor.fetchall()
+        conn.close()
+
+        message_to_send = self.system_message + "\n The user has read these books as they are the ones in the database. And the ratings of the books are as follows: " + str(books)
+
         messages = [
-        {"role": "system", "content": self.system_message},
+        {"role": "system", "content": message_to_send},
         {"role": "user", "content": full_prompt}
         ]
 
