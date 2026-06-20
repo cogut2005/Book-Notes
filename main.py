@@ -1,23 +1,40 @@
 import sys
 import os
 import sqlite3
-import requests
-import json
-import threading
 import re
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QSplitter, QListWidget, QTextEdit, 
                              QLineEdit, QPushButton, QTextBrowser, QListWidgetItem,
-                             QLabel, QMessageBox, QInputDialog, QDialog)
-from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
+                             QLabel, QMessageBox, QDialog)
+from PyQt6.QtCore import Qt, QTimer
 from add_book_dialog import AddBookDialog
 from edit_book_dialog import EditBookDialog
-from dotenv import load_dotenv
-from openai import OpenAI
-import chromadb
-from sentence_transformers import SentenceTransformer
 
-MODEL_NAME = "openai/gpt-oss-20b"
+try:
+    from dotenv import load_dotenv
+except ModuleNotFoundError:
+    def load_dotenv():
+        return False
+
+
+load_dotenv()
+
+def normalize_openai_base_url(url: str) -> str:
+    """Ensure the local OpenAI-compatible base URL points at the v1 API root."""
+    normalized = (url or "").strip().rstrip("/")
+    if not normalized:
+        return "http://127.0.0.1:1234/v1"
+    if normalized.endswith("/v1"):
+        return normalized
+    return f"{normalized}/v1"
+
+
+LOCAL_AI_BASE_URL = normalize_openai_base_url(
+    os.getenv("LOCAL_OPENAI_BASE_URL", "http://127.0.0.1:1234/v1")
+)
+LOCAL_AI_MODEL = os.getenv("LOCAL_OPENAI_MODEL", "openai/gpt-oss-20b")
+LOCAL_AI_API_KEY = os.getenv("LOCAL_OPENAI_API_KEY", "not-needed")
+LOCAL_AI_HEALTHCHECK_TIMEOUT = float(os.getenv("LOCAL_OPENAI_TIMEOUT_SECONDS", "0.75"))
 
 
 
@@ -25,23 +42,20 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.db_path = os.path.join(os.path.dirname(__file__), "notes_database.db")
-        
-        self.local_client = OpenAI(
-            base_url="http://127.0.0.1:1234/v1",  
-            api_key="not-needed"                  
-        )
+        self.ai_base_url = LOCAL_AI_BASE_URL
+        self.ai_model_name = LOCAL_AI_MODEL
+        self.ai_api_key = LOCAL_AI_API_KEY
+        self.local_client = None
+        self.ai_enabled = False
+        self.ai_status_message = ""
         self.system_message = "You are a helpful assistant that analyzes a user's book collection and notes. You will be provided with the complete database of books, authors, types, and notes. Answer questions based on this data, provide insights, recommendations, or summaries as requested. If the answer cannot be found in the provided data, say so clearly."
- 
-
-        self.chroma_client = chromadb.PersistentClient(path="chroma_store")
-        self.collection = self.chroma_client.get_or_create_collection("notes")
-        self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
         self.init_database()
         self.init_ui()
         self.setup_connections()
         self.load_stylesheet()
         self.load_books_from_database()
+        self.configure_ai_backend()
         
         # Initialize search timer for delayed search
         self.search_timer = QTimer()
@@ -258,6 +272,55 @@ class MainWindow(QMainWindow):
                 self.setStyleSheet(file.read())
         except FileNotFoundError:
             print("Warning: mainWindowStyle.css not found. Using default styling.")
+
+    def configure_ai_backend(self):
+        """Initialize optional local AI integration without blocking the notes app."""
+        try:
+            import requests
+            from openai import OpenAI
+        except ModuleNotFoundError as exc:
+            self.set_ai_availability(
+                False,
+                f"AI disabled: missing optional dependency '{exc.name}'. Install requirements to enable local AI."
+            )
+            return
+
+        healthcheck_url = f"{self.ai_base_url.rstrip('/')}/models"
+
+        try:
+            response = requests.get(healthcheck_url, timeout=LOCAL_AI_HEALTHCHECK_TIMEOUT)
+            response.raise_for_status()
+        except requests.RequestException:
+            self.set_ai_availability(
+                False,
+                f"AI disabled: no local OpenAI-compatible server at {self.ai_base_url}"
+            )
+            return
+
+        self.local_client = OpenAI(
+            base_url=self.ai_base_url,
+            api_key=self.ai_api_key
+        )
+        self.set_ai_availability(
+            True,
+            f"AI ready: {self.ai_model_name} via {self.ai_base_url}"
+        )
+
+    def set_ai_availability(self, enabled, status_message):
+        """Reflect AI backend availability in the UI."""
+        self.ai_enabled = enabled
+        self.ai_status_message = status_message
+        self.ask_ai_button.setEnabled(enabled)
+        self.ai_question_input.setEnabled(enabled)
+        self.ai_response_browser.clear()
+
+        if enabled:
+            self.ai_question_input.setPlaceholderText("Ask the AI assistant about your notes...")
+            self.ai_response_browser.append(f"AI Assistant: {status_message}")
+        else:
+            self.ai_question_input.setPlaceholderText("Start your local AI server to enable chat...")
+            self.ai_response_browser.append(f"AI Assistant: {status_message}")
+            self.ai_response_browser.append("Set LOCAL_OPENAI_BASE_URL or edit LOCAL_AI_BASE_URL in main.py if needed.")
             
     def init_database(self):
         """Initialize SQLite database and create table if it doesn't exist"""
@@ -644,30 +707,29 @@ class MainWindow(QMainWindow):
         dialog = AddBookDialog(self)
         
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            if dialog.validate_input():
-                book_data = dialog.get_book_data()
+            book_data = dialog.get_book_data()
+            
+            # Add to database
+            book_id = self.add_book_to_database(
+                book_data['name'], 
+                book_data['creator'], 
+                book_data['type'],
+                book_data['notes'],
+                book_data['rating']
+            )
+            
+            if book_id:
+                self.load_books_from_database()
+                print(f"Added book: '{book_data['name']}' by '{book_data['creator']}' ({book_data['type']}) with ID {book_id}")
                 
-                # Add to database
-                book_id = self.add_book_to_database(
-                    book_data['name'], 
-                    book_data['creator'], 
-                    book_data['type'],
-                    book_data['notes'],
-                    book_data['rating']
-                )
+                # Auto-select the newly added book
+                self.select_book_by_id(book_id)
                 
-                if book_id:
-                    self.load_books_from_database()
-                    print(f"Added book: '{book_data['name']}' by '{book_data['creator']}' ({book_data['type']}) with ID {book_id}")
-                    
-                    # Auto-select the newly added book
-                    self.select_book_by_id(book_id)
-                    
-                    QMessageBox.information(self, "Success", f"Book '{book_data['name']}' added successfully!")
-                    
-                    # If notes were added, show them in the editor
-                    if book_data['notes']:
-                        self.notes_editor.setPlainText(book_data['notes'])
+                QMessageBox.information(self, "Success", f"Book '{book_data['name']}' added successfully!")
+                
+                # If notes were added, show them in the editor
+                if book_data['notes']:
+                    self.notes_editor.setPlainText(book_data['notes'])
     
     def on_delete_book_clicked(self):
         """Handle delete book button click"""
@@ -764,6 +826,9 @@ class MainWindow(QMainWindow):
     
     def message_local(self, prompt: str) -> str:
         """Send message to local AI model with database context"""
+        if not self.ai_enabled or self.local_client is None:
+            return self.ai_status_message or "AI is currently unavailable."
+
         try:
             # Get all database content as context
             database_context = self.get_all_database_content()
@@ -776,10 +841,18 @@ class MainWindow(QMainWindow):
                 {"role": "user", "content": full_prompt}
             ]
             completion = self.local_client.chat.completions.create(
-                model=MODEL_NAME,
+                model=self.ai_model_name,
                 messages=messages,
             )
-            return self.clean_output(completion.choices[0].message.content)
+            if not getattr(completion, "choices", None):
+                return "Local model returned no choices. Check the LM Studio server logs and model compatibility."
+
+            message = completion.choices[0].message
+            content = getattr(message, "content", None)
+            if content is None:
+                return "Local model returned an empty message. Check the LM Studio server logs and model compatibility."
+
+            return self.clean_output(content)
         except Exception as e:
             return f"Error connecting to local model: {str(e)}"
     
@@ -847,24 +920,23 @@ class MainWindow(QMainWindow):
             # Create and show edit dialog
             dialog = EditBookDialog(selected_book, self)
             if dialog.exec() == QDialog.DialogCode.Accepted:
-                if dialog.validate_input():
-                    book_data = dialog.get_book_data()
+                book_data = dialog.get_book_data()
+                
+                # Update in database
+                if self.update_book_in_database(book_data):
+                    # Refresh the book list to show updated information
+                    current_sort = self.sort_combo.currentText()
+                    self.load_books_from_database(sort_by=current_sort)
                     
-                    # Update in database
-                    if self.update_book_in_database(book_data):
-                        # Refresh the book list to show updated information
-                        current_sort = self.sort_combo.currentText()
-                        self.load_books_from_database(sort_by=current_sort)
-                        
-                        print(f"Updated book: '{book_data['name']}' by '{book_data['creator']}' ({book_data['type']}) - Rating: {book_data['rating']} stars")
-                        
-                        # Reselect the updated book if possible
-                        for i in range(self.book_list.count()):
-                            item = self.book_list.item(i)
-                            item_data = item.data(Qt.ItemDataRole.UserRole)
-                            if item_data and item_data.get('id') == book_data['id']:
-                                self.book_list.setCurrentItem(item)
-                                break
+                    print(f"Updated book: '{book_data['name']}' by '{book_data['creator']}' ({book_data['type']}) - Rating: {book_data['rating']} stars")
+                    
+                    # Reselect the updated book if possible
+                    for i in range(self.book_list.count()):
+                        item = self.book_list.item(i)
+                        item_data = item.data(Qt.ItemDataRole.UserRole)
+                        if item_data and item_data.get('id') == book_data['id']:
+                            self.book_list.setCurrentItem(item)
+                            break
         else:
             QMessageBox.warning(self, "Warning", "Please select a book to edit!")
     

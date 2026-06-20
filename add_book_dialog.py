@@ -38,7 +38,7 @@ class AddBookDialog(QDialog):
         self.creator_input = QLineEdit()
         self.creator_input.setObjectName("creator_input")
         self.creator_input.setPlaceholderText("Enter author/host/creator...")
-        self.creator_label = QLabel("Author/Creator*:")
+        self.creator_label = QLabel("Author/Creator:")
         self.creator_label.setObjectName("creator_label")
         self.creator_label.setBuddy(self.creator_input)
         form_layout.addRow(self.creator_label, self.creator_input)
@@ -48,7 +48,7 @@ class AddBookDialog(QDialog):
         self.type_combo.setObjectName("type_combo")
         self.type_combo.addItems(["Book", "Podcast", "Audiobook", "Article", "Other"])
 
-        self.type_label = QLabel("Type*:")
+        self.type_label = QLabel("Type:")
         self.type_label.setObjectName("type_label")
         self.type_label.setBuddy(self.type_combo)
         form_layout.addRow(self.type_label, self.type_combo)
@@ -82,9 +82,14 @@ class AddBookDialog(QDialog):
         button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
-        button_box.accepted.connect(self.accept)
+        button_box.accepted.connect(self.on_accept)
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
+
+    def on_accept(self):
+        """Validate the form before closing the dialog."""
+        if self.validate_input():
+            self.accept()
         
     def get_book_data(self):
         """Return the entered book data"""
