@@ -1,15 +1,8 @@
 import sys
 import os
 import sqlite3
-<<<<<<< HEAD
-from langchain_openai import ChatOpenAI
-from langchain_text_splitters import CharacterTextSplitter
-import requests
-import json
-import threading
-=======
->>>>>>> origin/main
 import re
+import hashlib
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QSplitter, QListWidget, QTextEdit, 
                              QLineEdit, QPushButton, QTextBrowser, QListWidgetItem,
@@ -17,28 +10,6 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PyQt6.QtCore import Qt, QTimer
 from add_book_dialog import AddBookDialog
 from edit_book_dialog import EditBookDialog
-<<<<<<< HEAD
-from dotenv import load_dotenv
-from openai import OpenAI
-from sentence_transformers import SentenceTransformer
-
-from langchain.document_loaders import DirectoryLoader, TextLoader
-from langchain.schema import Document
-#from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain_community.embeddings import HuggingFaceEmbeddings
-
-from langchain.vectorstores import FAISS
-import numpy as np
-from sklearn.manifold import TSNE
-from langchain.memory import ConversationBufferMemory
-from langchain.chains import ConversationalRetrievalChain
-
-from langchain_community.chat_models import ChatOllama
-from langchain.chains import ConversationalRetrievalChain
-from langchain.memory import ConversationBufferMemory
-
-MODEL_NAME = "openai/gpt-oss-20b"
-=======
 
 try:
     from dotenv import load_dotenv
@@ -65,7 +36,6 @@ LOCAL_AI_BASE_URL = normalize_openai_base_url(
 LOCAL_AI_MODEL = os.getenv("LOCAL_OPENAI_MODEL", "openai/gpt-oss-20b")
 LOCAL_AI_API_KEY = os.getenv("LOCAL_OPENAI_API_KEY", "not-needed")
 LOCAL_AI_HEALTHCHECK_TIMEOUT = float(os.getenv("LOCAL_OPENAI_TIMEOUT_SECONDS", "0.75"))
->>>>>>> origin/main
 
 
 
@@ -73,32 +43,26 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.db_path = os.path.join(os.path.dirname(__file__), "notes_database.db")
-<<<<<<< HEAD
-        
-=======
         self.ai_base_url = LOCAL_AI_BASE_URL
         self.ai_model_name = LOCAL_AI_MODEL
         self.ai_api_key = LOCAL_AI_API_KEY
         self.local_client = None
         self.ai_enabled = False
         self.ai_status_message = ""
->>>>>>> origin/main
-        self.system_message = "You are a helpful assistant that analyzes a user's book collection and notes. You will be provided with the complete database of books, authors, types, and notes. Answer questions based on this data, provide insights, recommendations, or summaries as requested. If the answer cannot be found in the provided data, say so clearly."
+        self.rag_vectorstore = None
+        self.rag_content_signature = None
+        self.system_message = (
+            "You are a helpful assistant that analyzes a user's book collection and notes. "
+            "Answer collection-specific questions using the retrieved note excerpts. "
+            "If the retrieved context does not contain the answer, say so clearly."
+        )
 
         self.init_database()
         self.init_ui()
         self.setup_connections()
         self.load_stylesheet()
         self.load_books_from_database()
-<<<<<<< HEAD
-
-        self.local_client = OpenAI(
-            base_url="http://127.0.0.1:1234/v1",  
-            api_key="not-needed"                  
-        )
-=======
         self.configure_ai_backend()
->>>>>>> origin/main
         
         # Initialize search timer for delayed search
         self.search_timer = QTimer()
@@ -864,64 +828,88 @@ class MainWindow(QMainWindow):
     def clean_output(self, text: str) -> str:
         """Remove <think> ... </think> blocks if they exist"""
         return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
-    
-    def message_local(self, prompt: str) -> str:
-<<<<<<< HEAD
-        documents = self.get_all_database_content()
 
-        if not documents:
-            return "No notes found in the database."
-        
-        docs = [Document(page_content=doc) for doc in documents]
-        text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-        chunks = text_splitter.split_documents(docs)
-        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-        vectorstore = FAISS.from_documents(chunks, embedding=embeddings)
+    def get_rag_source_texts(self):
+        """Return one searchable document per saved item."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                books = conn.execute(
+                    "SELECT id, name, creator, type, notes, rating "
+                    "FROM books ORDER BY name"
+                ).fetchall()
+        except sqlite3.Error as exc:
+            raise RuntimeError(f"Could not read notes database: {exc}") from exc
 
-        retriever = vectorstore.as_retriever()
-        retrieved_docs = retriever.get_relevant_documents(prompt)
-        context = "\n\n".join([doc.page_content for doc in retrieved_docs])
+        documents = []
+        for book_id, name, creator, book_type, notes, rating in books:
+            documents.append(
+                "\n".join(
+                    [
+                        f"Item ID: {book_id}",
+                        f"Title: {name}",
+                        f"Creator: {creator or 'Unknown'}",
+                        f"Type: {book_type or 'Unknown'}",
+                        f"Rating: {rating}/5" if rating else "Rating: Not rated",
+                        f"Notes: {notes or '(No notes yet)'}",
+                    ]
+                )
+            )
+        return documents
 
-        full_prompt = f"{prompt}\n\nContext from notes:\n{context}"
+    def retrieve_note_context(self, prompt: str) -> str:
+        """Retrieve the note chunks most relevant to a question."""
+        try:
+            from langchain_core.documents import Document
+            from langchain_text_splitters import RecursiveCharacterTextSplitter
+            from langchain_huggingface import HuggingFaceEmbeddings
+            from langchain_community.vectorstores import FAISS
+        except ModuleNotFoundError as exc:
+            raise RuntimeError(
+                f"Missing RAG dependency '{exc.name}'. Install requirements.txt."
+            ) from exc
 
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT name, creator, type, rating FROM books ORDER BY name")
-        books = cursor.fetchall()
-        conn.close()
+        source_texts = self.get_rag_source_texts()
+        if not source_texts:
+            return ""
 
-        message_to_send = self.system_message + "\n The user has read these books as they are the ones in the database. And the ratings of the books are as follows: " + str(books)
+        signature = hashlib.sha256(
+            "\0".join(source_texts).encode("utf-8")
+        ).hexdigest()
 
-        messages = [
-        {"role": "system", "content": message_to_send},
-        {"role": "user", "content": full_prompt}
-        ]
+        if self.rag_vectorstore is None or signature != self.rag_content_signature:
+            documents = [Document(page_content=text) for text in source_texts]
+            splitter = RecursiveCharacterTextSplitter(
+                chunk_size=1000,
+                chunk_overlap=200,
+            )
+            chunks = splitter.split_documents(documents)
+            embeddings = HuggingFaceEmbeddings(
+                model_name="sentence-transformers/all-MiniLM-L6-v2"
+            )
+            self.rag_vectorstore = FAISS.from_documents(chunks, embeddings)
+            self.rag_content_signature = signature
 
-        response = self.local_client.chat.completions.create(
-        model=MODEL_NAME,
-        messages=messages,
-        temperature=0.7,
-        max_tokens=1024
+        matches = self.rag_vectorstore.similarity_search(
+            prompt,
+            k=min(4, len(source_texts)),
         )
+        return "\n\n---\n\n".join(document.page_content for document in matches)
 
-        return response.choices[0].message.content.strip()
-
-
-
-
-
-=======
+    def message_local(self, prompt: str) -> str:
         """Send message to local AI model with database context"""
         if not self.ai_enabled or self.local_client is None:
             return self.ai_status_message or "AI is currently unavailable."
 
         try:
-            # Get all database content as context
-            database_context = self.get_all_database_content()
-            
-            # Combine the database context with the user's question
-            full_prompt = f"{database_context}\n\nUser Question: {prompt}\n\nPlease answer the question based on the book collection data above. If there is no relevant information, please provide informative answers based on your own knowladge. Assume that all the content in the database has been read by the user."
+            retrieved_context = self.retrieve_note_context(prompt)
+            if not retrieved_context:
+                return "No saved books or notes are available for retrieval."
+
+            full_prompt = (
+                f"User question:\n{prompt}\n\n"
+                f"Retrieved context from the user's notes:\n{retrieved_context}\n\n"
+                "Answer using the retrieved context. If it is insufficient, say so clearly."
+            )
             
             messages = [
                 {"role": "system", "content": self.system_message},
@@ -942,8 +930,7 @@ class MainWindow(QMainWindow):
             return self.clean_output(content)
         except Exception as e:
             return f"Error connecting to local model: {str(e)}"
-    
->>>>>>> origin/main
+
     def on_ask_ai_clicked(self):
         """Handle ask AI button click with real AI integration"""
         question = self.ai_question_input.text().strip()

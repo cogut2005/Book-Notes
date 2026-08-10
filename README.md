@@ -27,6 +27,9 @@ A PyQt6 desktop application for managing books, podcasts, and notes with an inte
 - **Bottom Panel**: Chat interface with a local AI assistant
 - **Question Input**: Ask questions about your notes and library
 - **Response Display**: View AI responses in the chat area
+- **Retrieval-Augmented Answers**: Splits saved items into searchable chunks and retrieves the most relevant excerpts for each question
+- **Local Embeddings**: Uses the `all-MiniLM-L6-v2` sentence-transformer model and an in-memory FAISS index
+- **Index Reuse**: Rebuilds the vector index only when the saved library content changes
 - **Local Model Support**: Works with OpenAI-compatible local servers such as LM Studio
 - **Auto Detection**: Disables the AI UI gracefully when the local model server is unavailable
 
@@ -72,6 +75,7 @@ A PyQt6 desktop application for managing books, podcasts, and notes with an inte
    Notes:
    - If you use LM Studio, start its local server before launching the app.
    - If you accidentally set `LOCAL_OPENAI_BASE_URL` without `/v1`, the app now normalizes it automatically.
+   - The first AI question may download the local `all-MiniLM-L6-v2` embedding model.
 
 6. **Run the application:**
    ```bash
@@ -156,6 +160,9 @@ The SQLite database file `notes_database.db` is created automatically in the app
 - Object-oriented design with MainWindow class
 - Modular UI components for easy maintenance
 - Separate CSS file for styling
+- SQLite as the local source of truth for items and notes
+- Sentence-transformer embeddings and FAISS similarity search for retrieval
+- OpenAI-compatible local model API for answer generation
 
 ### Extensibility
 The application is designed to be easily extended with:
@@ -181,6 +188,12 @@ The application is designed to be easily extended with:
 - requests
 - python-dotenv
 - openai
+- langchain-community
+- langchain-core
+- langchain-text-splitters
+- langchain-huggingface
+- sentence-transformers
+- faiss-cpu
 
 ### System Requirements
 - **RAM**: 256MB minimum
@@ -206,7 +219,7 @@ The application is designed to be easily extended with:
 4. **AI assistant is disabled**
    - Start your local OpenAI-compatible model server
    - Verify `LOCAL_OPENAI_BASE_URL` points to the correct local endpoint, typically `http://127.0.0.1:1234/v1`
-   - Reinstall dependencies if `python-dotenv`, `requests`, or `openai` are missing: `pip install -r requirements.txt`
+   - Reinstall dependencies if an AI or RAG package is missing: `pip install -r requirements.txt`
 
 5. **LM Studio logs show `Unexpected endpoint or method`**
    - This usually means the server is receiving `/models` or `/chat/completions` instead of `/v1/models` or `/v1/chat/completions`
