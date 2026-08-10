@@ -32,7 +32,10 @@ wheels/
 *.db-journal
 *.db-wal
 *.db-shm
+<<<<<<< HEAD
 notes_database.db
+=======
+>>>>>>> origin/main
 
 # IDE
 .vscode/
