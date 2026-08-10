@@ -50,3 +50,5 @@ Thumbs.db
 
 # ChromaDB
 chroma_store/
+
+.env
