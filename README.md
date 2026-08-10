@@ -1,17 +1,19 @@
 # Personal Note-Taking App
 
-A modern PyQt6 desktop application for taking notes on books, podcasts, and audiobooks with an integrated AI assistant.
+A PyQt6 desktop application for managing books, podcasts, and notes with an integrated local AI assistant.
 
 ## Features
 
 ### 📚 Book Management
-- **Left Panel**: View your collection of books, podcasts, and audiobooks
-- **Add Book Button**: Add new items to your collection with name, creator, and type
-- **Book Types**: Supports Books, Podcasts, Audiobooks, Articles, and Other
+- **Left Panel**: View your collection of books, podcasts, audiobooks, articles, and other items
+- **Add Book Button**: Add new items with name, creator, type, rating, and optional initial notes
+- **Edit Book Button**: Update existing item metadata at any time
+- **Book Types**: Supports Book, Podcast, Audiobook, Article, and Other
+- **Ratings**: Store a 0-5 star rating for each item
 - **SQLite Database**: All data is persistently stored in a local SQLite database
 
 ### 📝 Note Taking
-- **Right Panel**: Rich text editor for writing notes
+- **Right Panel**: Text editor for writing notes
 - **Linked Notes**: Notes are associated with the selected book/podcast
 - **Auto-Load**: Notes are automatically loaded when selecting a book
 - **Save Functionality**: Save your notes directly to the SQLite database
@@ -22,10 +24,14 @@ A modern PyQt6 desktop application for taking notes on books, podcasts, and audi
 - **Full-text Search**: Search within your notes content
 
 ### 🤖 AI Assistant
-- **Bottom Panel**: Chat interface with AI assistant
-- **Question Input**: Ask questions about your notes
+- **Bottom Panel**: Chat interface with a local AI assistant
+- **Question Input**: Ask questions about your notes and library
 - **Response Display**: View AI responses in the chat area
-- **Placeholder**: Currently prints questions to console
+- **Retrieval-Augmented Answers**: Splits saved items into searchable chunks and retrieves the most relevant excerpts for each question
+- **Local Embeddings**: Uses the `all-MiniLM-L6-v2` sentence-transformer model and an in-memory FAISS index
+- **Index Reuse**: Rebuilds the vector index only when the saved library content changes
+- **Local Model Support**: Works with OpenAI-compatible local servers such as LM Studio
+- **Auto Detection**: Disables the AI UI gracefully when the local model server is unavailable
 
 ## Installation & Setup
 
@@ -54,12 +60,24 @@ A modern PyQt6 desktop application for taking notes on books, podcasts, and audi
    venv\Scripts\activate
    ```
 
-4. **Install PyQt6:**
+4. **Install dependencies:**
    ```bash
-   pip install PyQt6
+   pip install -r requirements.txt
    ```
 
-5. **Run the application:**
+5. **Optional: configure local AI endpoint**
+   Create a `.env` file in the project root if you want to override the default local model settings:
+   ```env
+   LOCAL_OPENAI_BASE_URL=http://127.0.0.1:1234/v1
+   LOCAL_OPENAI_MODEL=openai/gpt-oss-20b
+   LOCAL_OPENAI_API_KEY=not-needed
+   ```
+   Notes:
+   - If you use LM Studio, start its local server before launching the app.
+   - If you accidentally set `LOCAL_OPENAI_BASE_URL` without `/v1`, the app now normalizes it automatically.
+   - The first AI question may download the local `all-MiniLM-L6-v2` embedding model.
+
+6. **Run the application:**
    ```bash
    python main.py
    ```
@@ -70,6 +88,8 @@ A modern PyQt6 desktop application for taking notes on books, podcasts, and audi
 Book Notes/
 ├── main.py              # Main application file
 ├── add_book_dialog.py   # Add book dialog class
+├── edit_book_dialog.py  # Edit book dialog class
+├── add_book.css         # Dialog styling
 ├── mainWindowStyle.css  # CSS styling for modern UI
 ├── notes_database.db    # SQLite database (created automatically)
 ├── venv/                # Virtual environment (created during setup)
@@ -94,24 +114,26 @@ The application uses SQLite database with the following table structure:
 - `creator` (TEXT) - Author, host, or creator name (optional)
 - `type` (TEXT NOT NULL) - Type: Book, Podcast, Audiobook, Article, or Other
 - `notes` (TEXT DEFAULT '') - Your personal notes for this item
+- `rating` (INTEGER DEFAULT 0) - Rating from 0 to 5 stars
 
 ## Current Functionality
 
 ### ✅ Fully Functional Features:
-- **Add Book Dialog**: Single-page popup for adding books with name, creator, type, and initial notes
+- **Add Book Dialog**: Single-page popup for adding books with name, creator, type, rating, and initial notes
+- **Edit Book Dialog**: Update an item's name, creator, type, and rating
 - **Delete Book Feature**: Remove books and all associated notes with confirmation dialog
 - **Start Notes Immediately**: Write your first notes directly in the add book dialog
 - **Auto-Selection**: Newly added books are automatically selected for immediate note-taking
 - **Save Note Button**: Saves your notes to the SQLite database
+- **Sorting**: Sort by name, rating, creator, or type
+- **Rating Display**: Show star ratings directly in the list
 - **Advanced Search**: Case-insensitive search through book names, authors, types, and notes content
 - **Real-time Search**: Search results update as you type (with 300ms delay)
 - **Clear Search**: Easy-to-use clear button to reset search and show all books
 - **Book Selection**: Automatically loads saved notes when selecting a book
-- **Smart UI**: Delete button is only enabled when a book is selected
+- **Smart UI**: Edit and delete buttons are only enabled when a book is selected
 - **Data Persistence**: All data is saved to `notes_database.db`
-
-### 🔄 Placeholder Features:
-- **Ask AI Button**: Prints questions and adds them to the chat display (ready for AI integration)
+- **Local AI Chat**: Sends your full library context plus your question to a local OpenAI-compatible model
 
 ## Database File
 
@@ -138,20 +160,19 @@ The SQLite database file `notes_database.db` is created automatically in the app
 - Object-oriented design with MainWindow class
 - Modular UI components for easy maintenance
 - Separate CSS file for styling
+- SQLite as the local source of truth for items and notes
+- Sentence-transformer embeddings and FAISS similarity search for retrieval
+- OpenAI-compatible local model API for answer generation
 
 ### Extensibility
 The application is designed to be easily extended with:
-- Database integration for persistent storage
-- Real AI assistant integration
 - Advanced search functionality
 - Export/import features
 - Multiple note formats (Markdown, HTML, etc.)
 
 ## Future Enhancements
 
-- [ ] Database integration (SQLite)
-- [ ] Real AI assistant (OpenAI API integration)
-- [ ] Advanced search with filtering
+- [ ] Advanced search filters
 - [ ] Note export (PDF, Markdown, HTML)
 - [ ] Dark mode theme
 - [ ] Note categories and tags
@@ -161,7 +182,18 @@ The application is designed to be easily extended with:
 ## Requirements
 
 ### Python Packages
-- PyQt6 (>=6.0.0)
+- PyQt6
+- PyQt6-Qt6
+- PyQt6-sip
+- requests
+- python-dotenv
+- openai
+- langchain-community
+- langchain-core
+- langchain-text-splitters
+- langchain-huggingface
+- sentence-transformers
+- faiss-cpu
 
 ### System Requirements
 - **RAM**: 256MB minimum
@@ -174,15 +206,26 @@ The application is designed to be easily extended with:
 
 1. **"ModuleNotFoundError: No module named 'PyQt6'"**
    - Make sure you've activated the virtual environment
-   - Install PyQt6 with: `pip install PyQt6`
+   - Install project dependencies with: `pip install -r requirements.txt`
 
 2. **CSS not loading properly**
-   - Ensure `styles.css` is in the same directory as `main.py`
+   - Ensure `mainWindowStyle.css` is in the same directory as `main.py`
    - Check file permissions
 
 3. **Application won't start**
    - Verify Python 3.8+ is installed
    - Check that all dependencies are installed in the virtual environment
+
+4. **AI assistant is disabled**
+   - Start your local OpenAI-compatible model server
+   - Verify `LOCAL_OPENAI_BASE_URL` points to the correct local endpoint, typically `http://127.0.0.1:1234/v1`
+   - Reinstall dependencies if an AI or RAG package is missing: `pip install -r requirements.txt`
+
+5. **LM Studio logs show `Unexpected endpoint or method`**
+   - This usually means the server is receiving `/models` or `/chat/completions` instead of `/v1/models` or `/v1/chat/completions`
+   - Set `LOCAL_OPENAI_BASE_URL=http://127.0.0.1:1234/v1` in `.env`
+   - Restart the application after changing `.env`
+   - The current code also auto-appends `/v1` when it is missing, but a restart is still required
 
 ## License
 
@@ -199,4 +242,4 @@ To contribute to this project:
 
 ---
 
-**Note**: This is a skeleton application with placeholder functionality. All button actions currently print to the console and are ready for integration with real backend services.
+**Note**: The app is fully usable as a local note manager today. The AI assistant depends on a running local OpenAI-compatible model server.
